@@ -1,4 +1,4 @@
-#summary Explains how does !GoomezCrawler work
+#summary Explains how does GoomezCrawler work
 How does !GoomezCrawler work?
 
 Easy!, !GoomezCrawler has an xml file called !GoomezCrawler.xml which has all the data the crawler needs to create the index.
