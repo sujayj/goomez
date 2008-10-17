@@ -89,7 +89,7 @@ namespace GoomezSearchHelper
         public static string TokenizeToIndex(string fullPath)
         {
             string strRet = Tokenize(fullPath, true);
-            strRet = strRet + " " + Spaceize(strRet);
+            strRet = strRet + " " + Spaceize(fullPath);
 
             return strRet;
         }
