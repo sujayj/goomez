@@ -31,12 +31,12 @@ namespace GoomezCrawler
         private static string K_CURRENTPATH = "";
         private static List<string> m_exclusions = null;
         private static List<string> m_extensions = null;
-        private static List<string> m_errors = new List<string>();
+        private static Dictionary<string,string> m_errors = new Dictionary<string,string>();
         private static bool errors = false;
         private static IndexWriter m_indexWriter = null;
         private static StreamWriter m_logFile = null;
         private static DateTime started;
-        private static string m_status = "|";
+        //private static string m_status = "|";
 
         static int Main(string[] args)
         {
@@ -61,6 +61,8 @@ namespace GoomezCrawler
                 m_extensions = GetConfigList(K_EXTENSIONS);
                 if (m_extensions.Count == 0)
                     throw new ApplicationException("No extensions found.");
+
+                File.Delete(K_LOGERRORFILE);
 
                 if (args.Length == 1)
                 {
@@ -106,9 +108,6 @@ namespace GoomezCrawler
                 if (m_indexWriter == null)
                     m_indexWriter = new IndexWriter(Path.Combine(K_CURRENTPATH, K_INDEXNAME), new StandardAnalyzer(), true);
 
-                //For now always Create or Overwrite
-                //m_indexWriter = new IndexWriter(K_INDEXNAME, new WhitespaceAnalyzer(), !Directory.Exists(K_INDEXNAME));
-                
                 return m_indexWriter;
             }
         }
@@ -191,25 +190,32 @@ namespace GoomezCrawler
         
         private static void IndexFolder(string folder)
         {
-            if (m_exclusions.Contains(folder))
-                return;
-
-            foreach (string childFolder in Directory.GetDirectories(folder))
+            try
             {
-                IndexFolder(childFolder);
+                if (m_exclusions.Contains(folder))
+                    return;
+
+                foreach (string childFolder in Directory.GetDirectories(folder))
+                {
+                    IndexFolder(childFolder);
+                }
+
+    #if DEBUG
+                //Console.ForegroundColor = ConsoleColor.DarkGreen;
+                //Console.WriteLine("Folder->" + folder);
+    #endif
+                foreach (string file in Directory.GetFiles(folder))
+                {
+                    FileInfo fi = new FileInfo(file);
+                    if (m_extensions.Contains(fi.Extension))
+                        IndexFile(fi);
+
+                    m_scanned++;
+                }
             }
-
-#if DEBUG
-            Console.ForegroundColor = ConsoleColor.DarkGreen;
-            Console.WriteLine("Folder->" + folder);
-#endif
-            foreach (string file in Directory.GetFiles(folder))
+            catch (Exception ex)
             {
-                FileInfo fi = new FileInfo(file);
-                if (m_extensions.Contains(fi.Extension))
-                    IndexFile(fi);
-
-                m_scanned++;
+                ShowAndLogException(FileType.Folder, folder, ex);
             }
         }
 
@@ -231,7 +237,7 @@ namespace GoomezCrawler
                 Console.ForegroundColor = ConsoleColor.Green;
 #endif
                 Console.WriteLine("File->" + file.FullName);
-
+                
                 Log(GoomezSearchHelper.Tokenizer.TokenizeToIndex(file.FullName));
 
             }
@@ -266,13 +272,13 @@ namespace GoomezCrawler
         {
             errors = true;
             string errorMsg = string.Format("Error on {0}:{1}",file ,ex.Message);
-            m_errors.Add(errorMsg);
+            m_errors.Add(file,errorMsg);
 
             ConsoleColor cc = Console.ForegroundColor;
             Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("");
             Console.WriteLine(errorMsg);
             Console.ForegroundColor = cc;
-
 
             StreamWriter output = new StreamWriter(K_LOGERRORFILE, true);
             output.WriteLine(errorMsg);
@@ -287,15 +293,34 @@ namespace GoomezCrawler
             if (errors)
             {
                 Console.WriteLine("=== ERRORS ===");
-                foreach (string errorLine in m_errors)
+                foreach (string errorLine in m_errors.Values)
                 {
                     Console.WriteLine(errorLine);
                 }
                 Console.WriteLine("=== ERRORS ===");
-                ShowAndLog("There were some erros, please check " + K_LOGERRORFILE);
+                ShowAndLog(string.Format("There were {0} erros, please check {1}",m_errors.Values.Count, K_LOGERRORFILE));
+                AddExclusions();
             }
             else
                 Console.WriteLine("No errors found.");
+        }
+
+        private static void AddExclusions()
+        {
+            StreamWriter output = new StreamWriter(K_LOGERRORFILE, true);
+            try
+            {
+                output.WriteLine("== EXCLUSIONS ==");
+                foreach (string dir in m_errors.Keys)
+                {
+                    output.WriteLine(string.Format("<exclusion>{0}</exclusion>", dir));
+                }
+
+            }
+            finally
+            {
+                output.Close();
+            }
         }
 
         private enum FileType
